@@ -1,0 +1,56 @@
+name: Deploy Kharcha to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'data.json', 'config.json' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # Changed to 'write' so we can push the HTML files back
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jinja2
+
+      - name: Generate HTML
+        run: python generate_public.py
+
+      # --- NEW STEP: Commit the generated files back to the repo ---
+      - name: Commit and Push Generated HTML
+        run: |
+          git config --global user.name "MD Raza"
+          git config --global user.email "delightreza@gmail.com"
+          git add index.html transactions/
+          # Only commit if there are changes to avoid empty commit errors
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Regenerate HTML [skip ci]" && git push)
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
