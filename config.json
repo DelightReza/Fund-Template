@@ -9,9 +9,9 @@
   "repoBranch": "branch",
   "dataFileName": "data.json",
   "people": [
-    "Raza"
+    {"id": "raza", "name": "Raza", "active": true}
   ],
   "billTypes": [
-    { "name": "Other", "icon": "📦" }
+    {"id": "other", "icon": "📦", "name": "Other"}
   ]
 }
