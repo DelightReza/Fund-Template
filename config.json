@@ -2,7 +2,6 @@
   "siteTitle": "Fund",
   "siteSubtitle": "Expenses Tracker",
   "currency": "₹",
-  "timeOffset": 5.5,
   "transactionsPerPage": 10,
   "repoOwner": "user",
   "repoName": "repo",

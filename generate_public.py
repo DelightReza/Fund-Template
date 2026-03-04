@@ -2,7 +2,7 @@
 import json
 import os
 import datetime
-from datetime import timezone, timedelta
+from datetime import timezone
 from jinja2 import Environment, FileSystemLoader
 
 CONFIG_FILE = 'config.json'
@@ -15,7 +15,6 @@ def load_config():
         return json.load(f)
 
 def load_data(config):
-    # If data.json doesn't exist, create it using config
     if not os.path.exists(DATA_FILE):
         people_config = config["people"]
         if people_config and isinstance(people_config[0], dict):
@@ -38,31 +37,19 @@ def load_data(config):
     with open(DATA_FILE, 'r') as f:
         return json.load(f)
 
-def format_utc_offset(offset_hours):
-    """Format UTC offset string like 'UTC+6' or 'UTC-5.5'."""
-    hours = int(offset_hours)
-    minutes = int(abs(offset_hours - hours) * 60)
-    sign = "+" if offset_hours >= 0 else "-"
-    
-    if minutes == 0:
-        return f"UTC{sign}{abs(hours)}"
-    else:
-        return f"UTC{sign}{abs(hours)}.{int(minutes/60*10)}"
-
-def format_local_time(iso_date, offset_hours):
-    """Convert ISO date to local time string."""
-    try:
-        utc_time = datetime.datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
-        hours = int(offset_hours)
-        minutes = int((offset_hours - hours) * 60)
-        local_time = utc_time + timedelta(hours=hours, minutes=minutes)
-        return local_time.strftime('%Y-%m-%d %H:%M')
-    except:
-        return iso_date
+def format_local_time(iso_date):
+    """
+    Simply formats the ISO string to readable text.
+    Input: '2025-01-20T10:00:00'
+    Output: '2025-01-20 10:00'
+    """
+    if not iso_date:
+        return ""
+    # Just replace T with space and strip Z if it exists from old data
+    return iso_date.replace('T', ' ').replace('Z', '')[:16]
 
 def calculate_finance(data, config):
     people_config = config["people"]
-    # Build ID-to-name maps (supports both V1 string array and V2 object array)
     if people_config and isinstance(people_config[0], dict):
         id_to_name = {p["id"]: p["name"] for p in people_config}
         all_person_ids = [p["id"] for p in people_config]
@@ -76,7 +63,6 @@ def calculate_finance(data, config):
     else:
         bt_id_to_name = {bt["name"]: bt["name"] for bt in bill_types_config}
 
-    # finance keyed by display NAME for template rendering
     finance = {id_to_name[p_id]: {'credits': 0, 'debits': 0, 'net_balance': 0} for p_id in all_person_ids}
     total_credits = 0
     total_debits = 0
@@ -84,13 +70,13 @@ def calculate_finance(data, config):
 
     for tx in data['transactions']:
         tx_copy = tx.copy()
-        tx_copy['display_date'] = format_local_time(tx['date'], config["timeOffset"])
-        # Resolve whoOrBill ID to display name
+        tx_copy['display_date'] = format_local_time(tx['date'])
+        
         if tx['type'] == 'credit':
             tx_copy['whoOrBill'] = id_to_name.get(tx['whoOrBill'], tx['whoOrBill'])
         else:
             tx_copy['whoOrBill'] = bt_id_to_name.get(tx['whoOrBill'], tx['whoOrBill'])
-        # Resolve splitAmong IDs to display names for templates
+        
         if tx.get('splitAmong'):
             tx_copy['splitAmong'] = [id_to_name.get(p, p) for p in tx['splitAmong']]
         enriched_txs.append(tx_copy)
@@ -103,7 +89,6 @@ def calculate_finance(data, config):
                 finance[person_name]['net_balance'] += tx['amount']
         elif tx['type'] == 'debit':
             total_debits += tx['amount']
-            # Use splitAmong snapshot (V2) or fall back to exemptions (V1)
             if tx.get('splitAmong'):
                 paying_ids = tx['splitAmong']
             else:
@@ -144,7 +129,6 @@ def main():
     data = load_data(config)
     results = calculate_finance(data, config)
 
-    # Prepare chart data (use bill types from config, handle V2 ID-based keys)
     bill_types_config = config["billTypes"]
     if bill_types_config and isinstance(bill_types_config[0], dict) and "id" in bill_types_config[0]:
         bill_type_names = [bt["name"] for bt in bill_types_config]
@@ -153,19 +137,11 @@ def main():
         bill_type_names = [bt["name"] for bt in bill_types_config]
         bill_type_totals = [data.get("billTypes", {}).get(name, 0) for name in bill_type_names]
 
-    # Time calculations
-    utc_now = datetime.datetime.now(timezone.utc)
-    offset = config["timeOffset"]
-    hours = int(offset)
-    minutes = int((offset - hours) * 60)
-    local_now = utc_now + timedelta(hours=hours, minutes=minutes)
-    
-    offset_str = format_utc_offset(offset)
-    dashboard_time = local_now.strftime('%Y-%m-%d %H:%M ') + offset_str
+    # Generate current build time (Local)
+    dashboard_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
     
     site_subtitle = config.get("siteSubtitle", "House Fund")
 
-    # Dashboard
     template = env.get_template('dashboard.html')
     output = template.render(
         site_title=config["siteTitle"],
@@ -186,7 +162,6 @@ def main():
 
     os.makedirs(TRANSACTIONS_DIR, exist_ok=True)
 
-    # Individual transaction pages
     tx_template = env.get_template('transaction.html')
     grouped = {}
     written = skipped = 0
@@ -196,7 +171,7 @@ def main():
             currency=config["currency"],
             site_title=config["siteTitle"],
             site_subtitle=site_subtitle,
-            last_updated=f"{tx['display_date']} {offset_str}"
+            last_updated=tx['display_date']
         )
         path = f"{TRANSACTIONS_DIR}/{tx['id']}.html"
         if smart_write(path, tx_html):
@@ -206,7 +181,6 @@ def main():
         if 'parentId' in tx:
             grouped.setdefault(tx['parentId'], []).append(tx)
 
-    # Group pages
     group_template = env.get_template('transaction_group.html')
     g_written = g_skipped = 0
     for gid, txs in grouped.items():
@@ -220,7 +194,7 @@ def main():
             currency=config["currency"],
             site_title=config["siteTitle"],
             site_subtitle=site_subtitle,
-            last_updated=f"{txs[0]['display_date']} {offset_str}"
+            last_updated=txs[0]['display_date']
         )
         path = f"{TRANSACTIONS_DIR}/{gid}.html"
         if smart_write(path, html):
