@@ -1,9 +1,5 @@
 {
-  "people": {
-    "raza": 0
-  },
-  "billTypes": {
-    "other": 0
-  },
+  "billTypes": {},
+  "people": {},
   "transactions": []
 }

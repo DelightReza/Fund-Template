@@ -2,15 +2,10 @@
   "siteTitle": "Fund",
   "siteSubtitle": "Expenses Tracker",
   "currency": "₹",
-  "transactionsPerPage": 10,
-  "repoOwner": "user",
-  "repoName": "repo",
-  "repoBranch": "branch",
+  "repoOwner": "",
+  "repoName": "",
+  "repoBranch": "",
   "dataFileName": "data.json",
-  "people": [
-    {"id": "raza", "name": "Raza", "active": true}
-  ],
-  "billTypes": [
-    {"id": "other", "icon": "📦", "name": "Other"}
-  ]
+  "people": [],
+  "billTypes": []
 }
