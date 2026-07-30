@@ -393,56 +393,96 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     const activePat = token || pat;
     const currentConfig = overrideConfig || config;
-    
-    if (!currentConfig.repoOwner || !currentConfig.repoName) {
-      if (!silent) showStatus('❌ Repository not configured', 'error');
-      return;
-    }
 
-    if (!silent) showStatus('🔄 Syncing from GitHub...', 'processing');
+    if (!silent) showStatus('🔄 Syncing data...', 'processing');
     setIsSyncing(true);
     isSyncingRef.current = true;
     try {
       const timestamp = Date.now();
-      const dataUrl = `https://api.github.com/repos/${currentConfig.repoOwner}/${currentConfig.repoName}/contents/${currentConfig.dataFileName}?t=${timestamp}`;
-      const configUrl = `https://api.github.com/repos/${currentConfig.repoOwner}/${currentConfig.repoName}/contents/config.json?t=${timestamp}`;
-      
-      const headers: HeadersInit = { Accept: 'application/vnd.github.v3.raw' };
-      if (activePat) {
-        headers['Authorization'] = `token ${activePat}`;
+      let fetchedDataObj: AppData | null = null;
+      let fetchedConfigObj: Config | null = null;
+
+      // 1. Try GitHub API if repo is configured
+      if (currentConfig.repoOwner && currentConfig.repoName) {
+        try {
+          const dataFileName = currentConfig.dataFileName || 'data.json';
+          const dataUrl = `https://api.github.com/repos/${currentConfig.repoOwner}/${currentConfig.repoName}/contents/${dataFileName}?t=${timestamp}`;
+          const configUrl = `https://api.github.com/repos/${currentConfig.repoOwner}/${currentConfig.repoName}/contents/config.json?t=${timestamp}`;
+          
+          const headers: HeadersInit = { Accept: 'application/vnd.github.v3.raw' };
+          if (activePat) {
+            headers['Authorization'] = `token ${activePat}`;
+          }
+
+          const [dataRes, configRes] = await Promise.all([
+            fetch(dataUrl, { headers, cache: 'no-store' }),
+            fetch(configUrl, { headers, cache: 'no-store' })
+          ]);
+
+          if (dataRes.ok) {
+            fetchedDataObj = getSafeData(await dataRes.json());
+          }
+          if (configRes.ok) {
+            fetchedConfigObj = getSafeConfig(await configRes.json());
+          }
+        } catch (e) {
+          console.warn("GitHub API sync failed, falling back to local files", e);
+        }
       }
 
-      const [dataRes, configRes] = await Promise.all([
-        fetch(dataUrl, { headers, cache: 'no-store' }),
-        fetch(configUrl, { headers, cache: 'no-store' })
-      ]);
+      // 2. Fall back to fetching deployed data.json and config.json directly with cache-busting
+      if (!fetchedDataObj) {
+        try {
+          const localDataRes = await fetch(`./data.json?t=${timestamp}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+          });
+          if (localDataRes.ok) {
+            fetchedDataObj = getSafeData(await localDataRes.json());
+          }
+        } catch (e) {
+          console.warn("Failed to fetch local data.json", e);
+        }
+      }
+
+      if (!fetchedConfigObj) {
+        try {
+          const localConfigRes = await fetch(`./config.json?t=${timestamp}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+          });
+          if (localConfigRes.ok) {
+            fetchedConfigObj = getSafeConfig(await localConfigRes.json());
+          }
+        } catch (e) {
+          console.warn("Failed to fetch local config.json", e);
+        }
+      }
 
       let updated = false;
 
-      if (dataRes.ok) {
-        const fetchedData = getSafeData(await dataRes.json());
-        setDataState(fetchedData);
-        setStorageItem('data', formatJsonString(fetchedData));
+      if (fetchedDataObj) {
+        setDataState(fetchedDataObj);
+        setStorageItem('data', formatJsonString(fetchedDataObj));
         dataShaRef.current = undefined;
         updated = true;
       }
       
-      if (configRes.ok) {
-        const fetchedConfig = getSafeConfig(await configRes.json());
-        setConfigState(fetchedConfig);
-        setStorageItem('config', formatJsonString(fetchedConfig));
+      if (fetchedConfigObj) {
+        setConfigState(fetchedConfigObj);
+        setStorageItem('config', formatJsonString(fetchedConfigObj));
         setConfigSha(undefined);
         updated = true;
       }
 
       if (updated) {
-        if (!silent) showStatus('✅ Synced with GitHub', 'success');
+        if (!silent) showStatus('✅ Synced latest data', 'success');
       } else {
         if (!silent) showStatus('❌ Failed to pull data', 'error');
       }
     } catch (error) {
        console.error("Sync error", error);
-       if (!silent) showStatus('❌ Failed to pull from GitHub', 'error');
+       if (!silent) showStatus('❌ Failed to pull data', 'error');
     } finally {
        setIsSyncing(false);
        isSyncingRef.current = false;

@@ -85,11 +85,6 @@ export function Layout() {
             <div>
               <div className="flex items-center gap-2">
                   <h1 className="font-extrabold text-xl leading-tight tracking-tight text-slate-900 dark:text-slate-50">{config.siteTitle}</h1>
-                  {pat && (
-                      <button onClick={() => syncFromGithub(undefined, undefined, true)} disabled={isSyncing} className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Sync data">
-                          <RefreshCw className={cn("w-4 h-4", isSyncing ? "animate-spin text-slate-900 dark:text-slate-50" : "")} />
-                      </button>
-                  )}
                   <button 
                       onClick={toggleTheme} 
                       className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 ml-1"
