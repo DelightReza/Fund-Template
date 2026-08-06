@@ -96,7 +96,8 @@ export function Profile() {
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                       {personTxs.map(tx => {
                           const isCredit = tx.displayType === 'Credit';
-                          const displayName = config.billTypes.find(b => b.id === tx.whoOrBill)?.name || tx.whoOrBill;
+                          let displayName = config.billTypes.find(b => b.id === tx.whoOrBill)?.name || tx.whoOrBill;
+                          if (tx.whoOrBill === 'other' && tx.note) displayName = tx.note;
                           return (
                               <tr key={tx.id} onClick={() => navigate({ search: `?tx=${tx.id}&person=${id}` })} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer active:bg-slate-100 dark:bg-slate-800/50">
                                   <td className="p-4 pl-6 w-16">

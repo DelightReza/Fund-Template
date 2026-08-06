@@ -27,7 +27,10 @@ export function TransactionHistory() {
              const lowerQuery = searchQuery.toLowerCase();
              let name = tx.whoOrBill;
              if (tx.type === 'credit') name = config.people.find(p => p.id === tx.whoOrBill)?.name || tx.whoOrBill;
-             else if (tx.type === 'debit') name = config.billTypes.find(b => b.id === tx.whoOrBill)?.name || tx.whoOrBill;
+             else if (tx.type === 'debit') {
+                 name = config.billTypes.find(b => b.id === tx.whoOrBill)?.name || tx.whoOrBill;
+                 if (tx.whoOrBill === 'other' && tx.note) name = tx.note;
+             }
              
              const matchesNote = tx.note?.toLowerCase().includes(lowerQuery);
              const matchesName = name.toLowerCase().includes(lowerQuery);
@@ -395,7 +398,10 @@ export function TransactionHistory() {
                         const isCredit = tx.type === 'credit';
                         let displayName = tx.whoOrBill;
                         if(isCredit) displayName = config.people.find(p => p.id === tx.whoOrBill)?.name || tx.whoOrBill;
-                        else displayName = config.billTypes.find(b => b.id === tx.whoOrBill)?.name || tx.whoOrBill;
+                        else {
+                            displayName = config.billTypes.find(b => b.id === tx.whoOrBill)?.name || tx.whoOrBill;
+                            if (tx.whoOrBill === 'other' && tx.note) displayName = tx.note;
+                        }
                         return (
                             <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                 <td className="p-4 pl-6 w-16">

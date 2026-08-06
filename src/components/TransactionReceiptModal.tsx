@@ -36,6 +36,7 @@ export function TransactionReceiptModal({ transaction, personId, onClose }: Tran
   } else {
     const bill = config.billTypes.find(b => b.id === transaction.whoOrBill);
     billTypeName = bill?.name || transaction.whoOrBill;
+    if (transaction.whoOrBill === 'other' && transaction.note) billTypeName = transaction.note;
     icon = bill?.icon || '🧾';
   }
 
@@ -49,6 +50,7 @@ export function TransactionReceiptModal({ transaction, personId, onClose }: Tran
           } else {
              const bill = config.billTypes.find(b => b.id === otherTx.whoOrBill);
              billTypeName = bill?.name || otherTx.whoOrBill;
+             if (otherTx.whoOrBill === 'other' && otherTx.note) billTypeName = otherTx.note;
              icon = bill?.icon || '🧾';
           }
       }
