@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore } from '../store';
-import { Save, Github, Settings as SettingsIcon, PlusCircle, Key, RefreshCw, Loader2, RotateCcw, Trash2 } from 'lucide-react';
+import { Save, Github, Settings as SettingsIcon, PlusCircle, Key, RefreshCw, Loader2, RotateCcw, Trash2, Lock, Unlock, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { TransactionForms } from '../components/admin/TransactionForms';
 import { AdvancedTools } from '../components/admin/AdvancedTools';
 import { TransactionHistory } from '../components/admin/TransactionHistory';
@@ -10,18 +10,40 @@ import { BalancesPanel } from '../components/admin/BalancesPanel';
 import { ResetCommitModal } from '../components/admin/ResetCommitModal';
 
 export function Admin() {
-  const { pat, setPat, saveDataToGithub, saveConfigToGithub, syncFromGithub, clearLocalData } = useAppStore();
+  const { pat, setPat, config, verifyGithubToken, adminVerification, setAdminVerification, saveDataToGithub, saveConfigToGithub, syncFromGithub, clearLocalData } = useAppStore();
   const [showSettings, setShowSettings] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [isCommittingData, setIsCommittingData] = useState(false);
   const [isCommittingConfig, setIsCommittingConfig] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationInput, setVerificationInput] = useState('');
 
-  const handleSetPat = () => {
-      const token = prompt("Enter your GitHub Personal Access Token (with 'repo' scope):\n\nNote: This will be automatically cleared after 30 days or manual logout.");
-      if (token !== null) {
-          setPat(token);
+  useEffect(() => {
+     if (pat && !adminVerification.isVerified) {
+         setIsVerifying(true);
+         verifyGithubToken(pat).then(res => {
+             setAdminVerification(res);
+             setIsVerifying(false);
+         });
+     }
+  }, [pat, config.repoOwner, config.repoName]);
+
+  const handleVerify = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsVerifying(true);
+      const res = await verifyGithubToken(verificationInput);
+      setAdminVerification(res);
+      if (res.isVerified) {
+          setPat(verificationInput);
       }
+      setIsVerifying(false);
+  };
+
+  const handleLockAdmin = () => {
+      setPat('');
+      setAdminVerification({ isVerified: false });
+      setVerificationInput('');
   };
 
   const handlePull = async () => {
@@ -51,13 +73,63 @@ export function Admin() {
     }
   };
 
+  if (!adminVerification.isVerified) {
+      return (
+          <main className="max-w-md mx-auto px-4 mt-20 animate-fade-in">
+              <div className="bg-white dark:bg-slate-900/90 backdrop-blur rounded-3xl p-8 shadow-xl border border-slate-100 dark:border-slate-800 text-center">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                      <ShieldAlert className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Admin Verification</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">
+                      Please enter a valid GitHub Personal Access Token with write/push permissions for 
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 mx-1">{config.repoOwner}/{config.repoName}</span>
+                      to access the admin panel.
+                  </p>
+                  
+                  <form onSubmit={handleVerify} className="space-y-4 text-left">
+                      <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">GitHub PAT</label>
+                          <input 
+                              type="password"
+                              value={verificationInput}
+                              onChange={(e) => setVerificationInput(e.target.value)}
+                              placeholder="ghp_..."
+                              className="w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all"
+                              required
+                          />
+                      </div>
+                      {adminVerification.error && (
+                          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400 font-medium">
+                              {adminVerification.error}
+                          </div>
+                      )}
+                      <button 
+                          type="submit" 
+                          disabled={isVerifying || !verificationInput}
+                          className="w-full bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 py-3 rounded-xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] duration-150 flex justify-center items-center shadow-lg shadow-blue-500/20"
+                      >
+                          {isVerifying ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Unlock className="w-5 h-5 mr-2" />}
+                          {isVerifying ? 'Verifying...' : 'Verify Access'}
+                      </button>
+                  </form>
+              </div>
+          </main>
+      );
+  }
+
   return (
     <main className="max-w-7xl mx-auto px-4 grid grid-cols-1 xl:grid-cols-3 gap-8 animate-fade-in relative">
-        {/* Settings Button - Top Right of the content area */}
-        <div className="xl:col-span-3 flex justify-end">
+        {/* Settings Button & Status - Top of the content area */}
+        <div className="xl:col-span-3 flex flex-wrap items-center justify-between gap-4">
+            <div className="inline-flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-full text-xs font-semibold text-emerald-700 dark:text-emerald-400 shadow-sm">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Verified Admin {adminVerification.adminHandle ? `(@${adminVerification.adminHandle})` : ''}
+            </div>
+            
             <button 
                 onClick={() => setShowSettings(true)}
-                className="bg-white dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-900 transition-all hover:scale-105 active:scale-95 duration-150 shadow-sm flex items-center"
+                className="bg-white dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-900 transition-all hover:scale-105 active:scale-95 duration-150 shadow-sm flex items-center ml-auto"
             >
                 <SettingsIcon className="w-4 h-4 mr-2" />
                 Settings
@@ -84,8 +156,8 @@ export function Admin() {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Push your state and configuration to your GitHub repository.</p>
                  <div className="flex flex-col gap-3">
                     <div className="flex gap-2">
-                        <button onClick={handleSetPat} className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-100 transition-all hover:scale-105 active:scale-95 duration-150 flex justify-center items-center">
-                            <Key className="w-3 h-3 mr-1 text-slate-500 dark:text-slate-300" /> Token
+                        <button onClick={handleLockAdmin} className="flex-1 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-800/40 border border-amber-200 dark:border-amber-700/50 py-2 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-400 transition-all hover:scale-105 active:scale-95 duration-150 flex justify-center items-center">
+                            <Lock className="w-3 h-3 mr-1" /> Lock Admin
                         </button>
                         <button onClick={handlePull} disabled={isPulling} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 active:scale-95 duration-150 flex justify-center items-center shadow-sm">
                             {isPulling ? <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> : null}

@@ -31,6 +31,9 @@ interface AppContextType {
   fetchRecentCommits: () => Promise<GitCommitInfo[]>;
   resetGithubCommit: (targetSha: string, headOffset?: number) => Promise<boolean>;
   clearLocalData: () => void;
+  verifyGithubToken: (token: string) => Promise<{isVerified: boolean, adminHandle?: string, error?: string}>;
+  adminVerification: {isVerified: boolean, adminHandle?: string, error?: string};
+  setAdminVerification: (status: {isVerified: boolean, adminHandle?: string, error?: string}) => void;
   statusMsg: StatusMessage | null;
   setStatusMsg: (msg: StatusMessage | null) => void;
   isLoading: boolean;
@@ -159,9 +162,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [statusMsg, setStatusMsg] = useState<StatusMessage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [adminVerification, setAdminVerification] = useState<{isVerified: boolean, adminHandle?: string, error?: string}>({ isVerified: false });
   const isSyncingRef = React.useRef(false);
   const dataShaRef = React.useRef<string | undefined>(undefined);
   const [configSha, setConfigSha] = useState<string | undefined>(undefined);
+
+  const verifyGithubToken = async (token: string) => {
+    if (!token) return { isVerified: false };
+    if (!config.repoOwner || !config.repoName) {
+        return { isVerified: false, error: "Repository not configured" };
+    }
+    
+    try {
+        const userRes = await fetch('https://api.github.com/user', {
+            headers: { Authorization: `token ${token}` }
+        });
+        if (!userRes.ok) {
+            return { isVerified: false, error: "Invalid token" };
+        }
+        const userData = await userRes.json();
+        
+        const repoRes = await fetch(`https://api.github.com/repos/${config.repoOwner}/${config.repoName}`, {
+            headers: { Authorization: `token ${token}` }
+        });
+        
+        if (!repoRes.ok) {
+            return { isVerified: false, error: "Repository not found or access denied" };
+        }
+        
+        const repoData = await repoRes.json();
+        if (!repoData.permissions?.push && !repoData.permissions?.admin) {
+            return { isVerified: false, error: "Token lacks write/push permissions for this repository" };
+        }
+        
+        return { isVerified: true, adminHandle: userData.login };
+    } catch (e) {
+        return { isVerified: false, error: "Network error during verification" };
+    }
+  };
 
   useEffect(() => {
     // Load from local storage initially
@@ -592,7 +630,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ config, data, pat, updateConfig, updateData, setPat, saveDataToGithub, saveConfigToGithub, syncFromGithub, fetchRecentCommits, resetGithubCommit, clearLocalData, statusMsg, setStatusMsg, isLoading, isSyncing }}>
+    <AppContext.Provider value={{ config, data, pat, updateConfig, updateData, setPat, saveDataToGithub, saveConfigToGithub, syncFromGithub, fetchRecentCommits, resetGithubCommit, clearLocalData, verifyGithubToken, adminVerification, setAdminVerification, statusMsg, setStatusMsg, isLoading, isSyncing }}>
       {children}
     </AppContext.Provider>
   );
